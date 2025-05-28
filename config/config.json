@@ -1,0 +1,23 @@
+{
+  "development": {
+    "username": "postgres",
+    "password": "C36g4f,15",
+    "database": "amida",
+    "host": "127.0.0.1",
+    "dialect": "postgres"
+  },
+  "test": {
+    "username": "postgres",
+    "password": "C36g4f,15",
+    "database": "amida_test",
+    "host": "127.0.0.1",
+    "dialect": "postgres"
+  },
+  "production": {
+    "username": "postgres",
+    "password": "C36g4f,15",
+    "database": "amida_prod",
+    "host": "127.0.0.1",
+    "dialect": "postgres"
+  }
+}
