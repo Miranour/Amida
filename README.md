@@ -78,7 +78,7 @@ Amida, kurumlar ve kullanıcılar için geliştirilmiş modern bir randevu yöne
 
 ## Lisans
 
-Bu proje henüz bir lisans altında değildir. Lisans seçimi için [issue](https://github.com/Miranour/Amida/issues) açabilirsiniz.
+Bu proje MIT lisansı altında lisanslanmıştır. Detaylar için [LICENSE](LICENSE) dosyasına bakın.
 
 ## İletişim
 
