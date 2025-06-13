@@ -3,6 +3,7 @@ const router = express.Router();
 const { auth, checkRole } = require('../middleware/auth');
 const {
     createAppointment,
+    createCustomerAppointment,
     updateAppointment,
     cancelAppointment,
     confirmAppointment,
@@ -21,6 +22,9 @@ router.get('/institution/list', auth, checkRole(['institution']), getInstitution
 router.get('/available', auth, getAvailableAppointments);
 router.post('/book/:appointmentId', auth, checkRole(['user']), bookAppointment);
 router.get('/user/list', auth, checkRole(['user']), getUserAppointments);
+
+// Yeni dinamik randevu oluşturma
+router.post('/create', auth, checkRole(['user']), createCustomerAppointment);
 
 // Randevu güncelleme (Kullanıcı için)
 router.put('/update/:appointmentId', auth, updateAppointment);

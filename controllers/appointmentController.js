@@ -1,25 +1,130 @@
-const { Appointment, User, Institution } = require('../models');
+const { Appointment, User, Institution, InstitutionService, InstitutionEmployee } = require('../models');
 const { auth, checkRole } = require('../middleware/auth');
 const { Op } = require('sequelize');
 
 // Kurum için randevu oluşturma
 const createAppointment = async (req, res) => {
     try {
-        const { date, timeSlot, description, maxParticipants } = req.body;
-        const institutionId = req.user.institutionId;
+        let { serviceId, employeeId, date, timeSlot, description } = req.body;
+        let { institutionId } = req.params;
+
+        // Tip dönüşümü ve validasyon
+        institutionId = parseInt(institutionId);
+        serviceId = parseInt(serviceId);
+        employeeId = parseInt(employeeId);
+
+        if (
+            !institutionId || isNaN(institutionId) ||
+            !serviceId || isNaN(serviceId) ||
+            !employeeId || isNaN(employeeId) ||
+            !date || !timeSlot
+        ) {
+            console.log('Parametreler:', { institutionId, serviceId, employeeId, date, timeSlot });
+            return res.status(400).json({ message: 'Eksik veya hatalı parametre. Lütfen tüm alanları doldurun.' });
+        }
+
+        // Kurum kontrolü
+        const institution = await Institution.findByPk(institutionId);
+        if (!institution) {
+            return res.status(404).json({ message: 'Kurum bulunamadı' });
+        }
+
+        // Hizmet kontrolü
+        const service = await InstitutionService.findOne({ where: { id: serviceId, institutionId } });
+        if (!service) {
+            return res.status(404).json({ message: 'Hizmet bulunamadı' });
+        }
+
+        // Çalışan kontrolü
+        const employee = await InstitutionEmployee.findOne({ where: { id: employeeId, institutionId } });
+        if (!employee) {
+            return res.status(404).json({ message: 'Çalışan bulunamadı' });
+        }
+
+        // Randevu oluştur
+        const appointment = await Appointment.create({
+            institutionId,
+            serviceId,
+            employeeId,
+            date,
+            timeSlot,
+            status: 'available',
+            maxParticipants: 1,
+            currentParticipants: 0,
+            description: description || ''
+        });
+
+        res.status(201).json(appointment);
+    } catch (error) {
+        console.error('Randevu oluşturma hatası:', error);
+        res.status(500).json({ message: 'Randevu oluşturulurken bir hata oluştu', error: error.message });
+    }
+};
+
+// Müşteri için randevu oluşturma (Dinamik Randevu)
+const createCustomerAppointment = async (req, res) => {
+    try {
+        const { institutionId, serviceId, employeeId, date, timeSlot, notes } = req.body;
+        const userId = req.user.id;
 
         const appointment = await Appointment.create({
             institutionId,
+            userId,
+            serviceId,
+            employeeId,
             date,
             timeSlot,
-            description,
-            maxParticipants,
-            status: 'available'
+            description: notes,
+            maxParticipants: 1,
+            currentParticipants: 1,
+            status: 'booked'
+        });
+
+        // Randevuyu ilişkilerle birlikte getir
+        const appointmentWithDetails = await Appointment.findByPk(appointment.id, {
+            include: [
+                { model: Institution, as: 'institution', attributes: ['institutionName'] },
+                { model: InstitutionService, as: 'service', attributes: ['serviceName'] },
+                { model: InstitutionEmployee, as: 'employee', attributes: ['firstName', 'lastName'] }
+            ]
         });
 
         res.status(201).json({
             success: true,
-            data: appointment
+            message: 'Randevu başarıyla oluşturuldu',
+            data: appointmentWithDetails
+        });
+    } catch (error) {
+        console.error('Randevu oluşturma hatası:', error);
+        res.status(400).json({
+            success: false,
+            error: error.message
+        });
+    }
+};
+
+// Kurumun randevularını listeleme (güncellenmiş)
+const getInstitutionAppointments = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const institution = await Institution.findOne({ where: { userId } });
+        if (!institution) {
+            return res.status(404).json({ message: 'Kurum bulunamadı' });
+        }
+
+        const appointments = await Appointment.findAll({
+            where: { institutionId: institution.id },
+            include: [
+                { model: User, as: 'user', attributes: ['firstName', 'lastName', 'email'] },
+                { model: InstitutionService, as: 'service', attributes: ['serviceName'] },
+                { model: InstitutionEmployee, as: 'employee', attributes: ['firstName', 'lastName'] }
+            ],
+            order: [['date', 'DESC'], ['timeSlot', 'ASC']]
+        });
+
+        res.status(200).json({
+            success: true,
+            data: appointments
         });
     } catch (error) {
         res.status(400).json({
@@ -29,16 +134,18 @@ const createAppointment = async (req, res) => {
     }
 };
 
-// Kurumun randevularını listeleme
-const getInstitutionAppointments = async (req, res) => {
+// Kullanıcının randevularını listeleme (güncellenmiş)
+const getUserAppointments = async (req, res) => {
     try {
-        const institutionId = req.user.institutionId;
+        const userId = req.user.id;
         const appointments = await Appointment.findAll({
-            where: { institutionId },
-            include: [{
-                model: User,
-                attributes: ['id', 'name', 'email']
-            }]
+            where: { userId },
+            include: [
+                { model: Institution, as: 'institution', attributes: ['institutionName'] },
+                { model: InstitutionService, as: 'service', attributes: ['serviceName'] },
+                { model: InstitutionEmployee, as: 'employee', attributes: ['firstName', 'lastName'] }
+            ],
+            order: [['date', 'DESC'], ['timeSlot', 'ASC']]
         });
 
         res.status(200).json({
@@ -99,30 +206,6 @@ const bookAppointment = async (req, res) => {
     }
 };
 
-// Kullanıcının randevularını listeleme
-const getUserAppointments = async (req, res) => {
-    try {
-        const userId = req.user.id;
-        const appointments = await Appointment.findAll({
-            where: { userId },
-            include: [{
-                model: Institution,
-                attributes: ['id', 'name', 'address']
-            }]
-        });
-
-        res.status(200).json({
-            success: true,
-            data: appointments
-        });
-    } catch (error) {
-        res.status(400).json({
-            success: false,
-            error: error.message
-        });
-    }
-};
-
 // Müsait randevuları listeleme
 const getAvailableAppointments = async (req, res) => {
     try {
@@ -150,7 +233,7 @@ const getAvailableAppointments = async (req, res) => {
 const updateAppointment = async (req, res) => {
     try {
         const { appointmentId } = req.params;
-        const { date, time, serviceType, notes } = req.body;
+        const { date, timeSlot, serviceType, notes } = req.body;
 
         const appointment = await Appointment.findOne({
             where: {
@@ -164,12 +247,12 @@ const updateAppointment = async (req, res) => {
         }
 
         // Randevu çakışması kontrolü
-        if (date && time) {
+        if (date && timeSlot) {
             const existingAppointment = await Appointment.findOne({
                 where: {
                     institutionId: appointment.institutionId,
                     date,
-                    time,
+                    timeSlot,
                     status: ['pending', 'confirmed'],
                     id: { [Op.ne]: appointmentId }
                 }
@@ -182,7 +265,7 @@ const updateAppointment = async (req, res) => {
 
         await appointment.update({
             date: date || appointment.date,
-            time: time || appointment.time,
+            timeSlot: timeSlot || appointment.timeSlot,
             serviceType: serviceType || appointment.serviceType,
             notes: notes || appointment.notes
         });
@@ -307,7 +390,7 @@ const searchAppointments = async (req, res) => {
                     attributes: ['institutionName', 'institutionAddress', 'city', 'district']
                 }
             ],
-            order: [['date', 'ASC'], ['time', 'ASC']],
+            order: [['date', 'ASC'], ['timeSlot', 'ASC']],
             limit: parseInt(limit),
             offset: offset
         });
@@ -326,6 +409,7 @@ const searchAppointments = async (req, res) => {
 
 module.exports = {
     createAppointment,
+    createCustomerAppointment,
     updateAppointment,
     cancelAppointment,
     confirmAppointment,

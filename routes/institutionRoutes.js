@@ -12,7 +12,8 @@ const {
     updateInstitutionSettings,
     uploadLogo,
     uploadPhotos,
-    getInstitutionDashboard
+    getInstitutionDashboard,
+    getInstitutionCustomers
 } = require('../controllers/institutionController');
 
 // Kurum kaydı (Kullanıcı için)
@@ -44,5 +45,26 @@ router.post('/upload-photos', auth, photoUpload.array('photos', 10), uploadPhoto
 
 // Dashboard verisi
 router.get('/dashboard', auth, getInstitutionDashboard);
+
+// Kurumun müşterilerini listele
+router.get('/customers', auth, checkRole(['institution']), getInstitutionCustomers);
+
+// Popüler kurumlar (dummy veri)
+router.get('/popular', (req, res) => {
+  res.json([
+    // Örnek veri, istersen boş dizi de dönebilirsin
+    { id: 1, institutionName: "Popüler Kurum 1" },
+    { id: 2, institutionName: "Popüler Kurum 2" }
+  ]);
+});
+
+// Şehirler (dummy veri)
+router.get('/cities', (req, res) => {
+  res.json([
+    "İstanbul",
+    "Ankara",
+    "İzmir"
+  ]);
+});
 
 module.exports = router; 

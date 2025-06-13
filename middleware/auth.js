@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { User } = require('../models');
+const { User, Institution } = require('../models');
 
 const auth = async (req, res, next) => {
     try {
@@ -14,6 +14,14 @@ const auth = async (req, res, next) => {
 
         if (!user) {
             return res.status(401).json({ message: 'Yetkilendirme hatası' });
+        }
+
+        // Eğer kullanıcı kurum ise, ona ait institutionId'yi bul ve ekle
+        if (user.role === 'institution') {
+            const institution = await Institution.findOne({ where: { userId: user.id } });
+            if (institution) {
+                user.dataValues.institutionId = institution.id;
+            }
         }
 
         req.user = user;

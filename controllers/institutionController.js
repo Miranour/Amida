@@ -8,6 +8,7 @@ const path = require('path');
 const { Appointment } = require('../models');
 const { sequelize } = require('../models');
 const { Op } = require('sequelize');
+const { Service } = require('../models');
 
 // Kurum Kaydı
 const registerInstitution = async (req, res) => {
@@ -435,106 +436,137 @@ const getInstitutionDashboard = async (req, res) => {
         // Kullanıcı bilgisi
         const user = await User.findByPk(userId);
 
-        // Geçici olarak sadece kullanıcı ve kurum bilgisini döndür
-        res.json({
-            user: { name: user.firstName + ' ' + user.lastName, lastLogin: user.updatedAt },
-            // Diğer veriler geçici olarak boş veya varsayılan
-            todaysAppointments: [],
-            pendingAppointments: 0,
-            cancelRequests: 0,
-            stats: {
-                totalAppointments: 0,
-                weekAppointments: 0,
-                topService: '-'
-            },
-            upcomingAppointments: [],
-            notifications: [], // Örnek statik veriyi burada tutabiliriz isterseniz
-            logs: [] // Örnek statik veriyi burada tutabiliriz isterseniz
-        });
-
-        // Orijinal kod (geçici olarak yorum satırı yapıldı)
-        /*
+        // Orijinal kod (geçici olarak yorum satırı yapıldı) - TEKRAR AKTIF EDILIYOR
         // Bugünün tarihi
         const today = new Date();
+        // Saat, dakika ve saniye bilgisini sıfırla
+        today.setHours(0, 0, 0, 0);
         const todayStr = today.toISOString().split('T')[0];
 
         // Randevu modelleri ve ilişkiler projede varsa eklenmeli
-        const { Appointment } = require('../models');
+        // const { Appointment } = require('../models'); // Zaten yukarıda tanımlı olmalı
+        // const { Op } = require('sequelize'); // Zaten yukarıda tanımlı olmalı
+        // const { sequelize } = require('../models'); // Zaten yukarıda tanımlı olmalı
 
         // Bugünün randevuları
         const todaysAppointments = await Appointment.findAll({
             where: {
                 institutionId: institution.id,
-                date: todayStr
+                // Sequelize ile tarih karşılaştırması için Op.gte ve Op.lt kullan
+                 date: { 
+                     [Op.gte]: today.toISOString(), // Bugünün başlangıcından büyük eşit
+                     [Op.lt]: new Date(today.getTime() + 24 * 60 * 60 * 1000).toISOString() // Yarının başlangıcından küçük
+                 }
             },
             include: [{ model: User, as: 'user', attributes: ['firstName', 'lastName'] }]
         });
 
         // Bekleyen işlemler
         const pendingAppointments = await Appointment.count({ where: { institutionId: institution.id, status: 'pending' } });
-        const cancelRequests = 0; // Geçici olarak sabit değer verildi
+        const cancelRequests = 0; // Geçici olarak sabit değer verildi, gerekirse güncellenebilir
 
         // İstatistikler
         const totalAppointments = await Appointment.count({ where: { institutionId: institution.id } });
-        const weekStart = new Date(today); weekStart.setDate(today.getDate() - today.getDay());
-        const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6);
+
+        // Bu haftanın başlangıcı (Pazar) ve sonu (Cumartesi)
+        const weekStart = new Date(today);
+        weekStart.setDate(today.getDate() - today.getDay()); // Haftanın başlangıcı (Pazar)
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6); // Haftanın sonu (Cumartesi)
+        weekEnd.setHours(23, 59, 59, 999); // Haftanın son gününün sonu
+
         const weekAppointments = await Appointment.count({
             where: {
                 institutionId: institution.id,
-                date: { [Op.between]: [weekStart.toISOString().split('T')[0], weekEnd.toISOString().split('T')[0]] }
+                 date: { 
+                     [Op.gte]: weekStart.toISOString(),
+                     [Op.lt]: new Date(weekEnd.getTime() + 24 * 60 * 60 * 1000).toISOString() // Haftanın son gününün sonundan küçük
+                 }
             }
         });
-        // En çok tercih edilen hizmet (örnek)
-        // const topService = await Appointment.findAll({
-        //     where: { institutionId: institution.id },
-        //     attributes: ['serviceType', [sequelize.fn('COUNT', sequelize.col('serviceType')), 'count']],
-        //     group: ['serviceType'],
-        //     order: [[sequelize.literal('count'), 'DESC']],
-        //     limit: 1
-        // });
+        
+        // En çok tercih edilen hizmet (Appointments tablosunda serviceType/serviceId olmadığı için kaldırıldı)
+        // const topServiceResult = await Appointment.findAll({ /* ... sorgu ... */ });
+        // const topService = topServiceResult.length > 0 ? topServiceResult[0].service?.name : '-';
 
-        // Geçici olarak en çok tercih edilen hizmet değeri
-        const topService = [{ serviceType: 'Veri Yok veya Hata' }];
+        // Geçici olarak en çok tercih edilen hizmet için varsayılan değer döndür
+        const topService = '-';
 
         // Yaklaşan randevular (bugünden sonrası)
         const upcomingAppointments = await Appointment.findAll({
             where: {
                 institutionId: institution.id,
-                date: { [Op.gte]: todayStr }
+                 date: { [Op.gte]: new Date().toISOString() }, // Şu andan itibaren
+                 status: { [Op.ne]: 'cancelled' } // İptal edilmemiş randevuları göster
             },
-            order: [['date', 'ASC'], ['time', 'ASC']],
+            order: [['date', 'ASC'], ['timeSlot', 'ASC']],
             limit: 5,
             include: [{ model: User, as: 'user', attributes: ['firstName', 'lastName'] }]
         });
 
-        // Sistem mesajları ve loglar (örnek statik, istersen modele ekleyebilirsin)
+        // Sistem mesajları ve loglar (şimdilik statik, istersen modele ekleyebilirsin)
         const notifications = [
-            { id: 1, message: 'Sistem güncellemesi yapılacaktır.', date: '2024-05-12' },
-            { id: 2, message: 'Yeni müşteri kaydı eklendi.', date: '2024-05-11' },
-        ];
+             // { id: 1, message: 'Sistem güncellemesi yapılacaktır.', date: '2024-05-12' },
+             // { id: 2, message: 'Yeni müşteri kaydı eklendi.', date: '2024-05-11' },
+        ]; // Boşaltıldı, gerekirse doldurulabilir
         const logs = [
-            { id: 1, action: 'Randevu oluşturuldu', date: '2024-05-13 09:30' },
-            { id: 2, action: 'Randevu onaylandı', date: '2024-05-13 09:35' },
-        ];
+             // { id: 1, action: 'Randevu oluşturuldu', date: '2024-05-13 09:30' },
+             // { id: 2, action: 'Randevu onaylandı', date: '2024-05-13 09:35' },
+        ]; // Boşaltıldı, gerekirse doldurulabilir
 
         res.json({
             user: { name: user.firstName + ' ' + user.lastName, lastLogin: user.updatedAt },
+            institution: { institutionName: institution.institutionName, id: institution.id }, // Kurum adını ve id'yi ekle
             todaysAppointments,
             pendingAppointments,
             cancelRequests,
             stats: {
                 totalAppointments,
                 weekAppointments,
-                topService: topService[0]?.serviceType
+                topService
             },
             upcomingAppointments,
             notifications,
             logs
         });
-        */
+
     } catch (error) {
         console.error('Dashboard verisi hatası:', error);
         res.status(500).json({ message: 'Sunucu hatası', details: error.message });
+    }
+};
+
+// Kurumun müşterilerini listele
+const getInstitutionCustomers = async (req, res) => {
+    try {
+        // Kurumun id'sini al
+        const userId = req.user.id;
+        const institution = await Institution.findOne({ where: { userId } });
+        if (!institution) {
+            return res.status(404).json({ message: 'Kurum bulunamadı' });
+        }
+        // Bu kuruma ait randevusu olan ve role'i 'user' olan kullanıcıları getir
+        const customers = await User.findAll({
+            where: {
+                role: 'user',
+                id: [
+                    ...new Set(
+                        (await Appointment.findAll({
+                            where: { institutionId: institution.id },
+                            attributes: ['userId'],
+                            raw: true
+                        }))
+                        .map(a => a.userId)
+                        .filter(uid => uid !== null)
+                    )
+                ]
+            },
+            attributes: ['id', 'firstName', 'lastName', 'email', 'phoneNumber']
+        });
+        res.json(customers);
+    } catch (error) {
+        console.error('Kurum müşterileri getirme hatası:', error);
+        res.status(500).json({ message: 'Sunucu hatası' });
     }
 };
 
@@ -548,5 +580,6 @@ module.exports = {
     updateInstitutionSettings,
     uploadLogo,
     uploadPhotos,
-    getInstitutionDashboard
+    getInstitutionDashboard,
+    getInstitutionCustomers
 }; 

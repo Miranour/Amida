@@ -1,10 +1,12 @@
 const express = require('express');
 const cors = require('cors');
 const sequelize = require('./config/database');
-const { User, Institution, Appointment } = require('./models');
+const { User, Institution, Appointment, InstitutionService, InstitutionEmployee } = require('./models');
 const authRoutes = require('./routes/authRoutes');
 const institutionRoutes = require('./routes/institutionRoutes');
-const appointmentRoutes = require('./routes/appointmentRoutes');
+const appointmentRoutes = require('./routes/appointments');
+const serviceRoutes = require('./routes/serviceRoutes');
+const employeeRoutes = require('./routes/employeeRoutes');
 require('dotenv').config();
 
 const app = express();
@@ -26,6 +28,8 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/institutions', institutionRoutes);
 app.use('/api/appointments', appointmentRoutes);
+app.use('/api/services', serviceRoutes);
+app.use('/api/employees', employeeRoutes);
 
 // PostgreSQL bağlantısı ve tablo oluşturma
 const initializeDatabase = async () => {
@@ -42,6 +46,12 @@ const initializeDatabase = async () => {
 
         await Appointment.sync();
         console.log('Appointments tablosu oluşturuldu');
+
+        await InstitutionService.sync();
+        console.log('InstitutionServices tablosu oluşturuldu');
+
+        await InstitutionEmployee.sync();
+        console.log('InstitutionEmployees tablosu oluşturuldu');
 
         // İlişkileri senkronize et
         await sequelize.sync();

@@ -23,8 +23,24 @@ const Appointment = sequelize.define('Appointment', {
             key: 'id'
         }
     },
+    serviceId: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        references: {
+            model: 'InstitutionServices',
+            key: 'id'
+        }
+    },
+    employeeId: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        references: {
+            model: 'InstitutionEmployees',
+            key: 'id'
+        }
+    },
     date: {
-        type: DataTypes.DATE,
+        type: DataTypes.DATEONLY,
         allowNull: false
     },
     timeSlot: {
@@ -32,7 +48,7 @@ const Appointment = sequelize.define('Appointment', {
         allowNull: false
     },
     status: {
-        type: DataTypes.ENUM('available', 'booked', 'cancelled'),
+        type: DataTypes.ENUM('available', 'booked', 'approved', 'rejected'),
         defaultValue: 'available'
     },
     description: {
